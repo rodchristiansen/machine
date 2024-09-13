@@ -11,11 +11,18 @@ class Machine_processor extends Processor
      * @param string data
      * @author abn290
      **/
-    public function run($plist)
+    public function run($data)
     {
-        $parser = new CFPropertyList();
-        $parser->parse($plist, CFPropertyList::FORMAT_XML);
-        $mylist = $parser->toArray();
+        // Detect the operating system
+        $isWindows = strpos($data, '{') === 0; // Check if the data starts with a curly brace (JSON)
+
+        if ($isWindows) {
+            $mylist = json_decode($data, true);
+        } else {
+            $parser = new CFPropertyList();
+            $parser->parse($data, CFPropertyList::FORMAT_XML);
+            $mylist = $parser->toArray();
+        }
 
         $mylist['serial_number'] = $this->serial_number;
 
@@ -29,13 +36,13 @@ class Machine_processor extends Processor
             $mylist['number_processors'] = preg_replace('/^[^0-9]*(\d+).*/', '$1', $mylist['number_processors']);
         }
 
-        // Convert memory string (4 GB) to int
+        // Convert memory string to int
         if (isset($mylist['physical_memory'])) {
             $mylist['physical_memory'] = intval($mylist['physical_memory']);
         }
 
-        // Convert OS version to int
-        if (isset($mylist['os_version'])) {
+        // Convert OS version to int (for macOS)
+        if (!$isWindows && isset($mylist['os_version'])) {
             $digits = explode('.', $mylist['os_version']);
             $mult = 10000;
             $mylist['os_version'] = 0;
@@ -59,8 +66,8 @@ class Machine_processor extends Processor
             $machine = new Machine_model();
         }
 
-        // Check if we need to retrieve model from Apple
-        if ($this->should_run_model_description_lookup($machine)){
+        // Check if we need to retrieve model from Apple (only for macOS)
+        if (!$isWindows && $this->should_run_model_description_lookup($machine)){
             require_once(__DIR__ . '/helpers/model_lookup_helper.php');
             $mylist['machine_desc'] = machine_model_lookup($this->serial_number);
         } 
